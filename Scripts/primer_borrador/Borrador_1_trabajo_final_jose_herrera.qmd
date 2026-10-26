@@ -1,0 +1,391 @@
+---
+title: "Análisis descriptivo de una epidemia simulada de fiebre aftosa"
+author: "Jose Herrera"
+date: today
+
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    number-sections: true
+    embed-resources: true
+    theme: cosmo
+
+execute:
+  warning: false
+  message: false
+---
+
+## Librerías
+
+```{r}
+library(tidyverse)
+library(lubridate)
+library(sf)
+library(leaflet)
+library(leaflet.extras)
+library(gt)
+library(scales)
+```
+
+
+## Carga de datos
+
+```{r}
+datos <- read.csv(
+  "fmd_simulado_completo.csv",
+  stringsAsFactors = FALSE
+)
+
+datos$Fecha_Sospecha <- as.Date(datos$Fecha_Sospecha)
+datos$Fecha_Positividad <- as.Date(datos$Fecha_Positividad)
+datos$Fecha_Sacrificio <- as.Date(datos$Fecha_Sacrificio)
+
+casos <- datos %>%
+  filter(estatus == "caso")
+
+```
+
+## Introducción
+
+Este archivo busca explorar los análisis que se tendrán que realizar con datos de las simulaciones reales que se puedan realizar en el proyecto de tesis. Se espera tener varias decenas de miles de simulaciones, por lo mismo esta primera aproximación basada en lo visual busca entregar un diagnóstico general de los resultados obtenidos. Como ya esta señalado en el readme del repositorio, los datos usados son una ampliacion del set de datos fmd.csv del paquete sparr de R.
+
+En un brote epidemico las primeras mediciones que se llevan a cabo son graficar curvas epidemicas, establecer morbilidades y llevar a cabo una representación cartográfica d ela situación. En esta primera aproxima se entregan estas primeras visualizaciones y tablas.
+
+Es importante recalcar que los datos al ser simulados no permiten obtener ningún tipo de conclusión válida o extrapolable.
+
+## Curva epidémica general
+
+Este gráfico representa el número total de casos por día, sin hacer distinciones ni de rubro productivo ni de especie, los graficos siguientes entregaran esta curva para las especies afectada:, bovina, ovina, porcina. La finalidad de una curva epidemica es obervar el comportamiento general del proceso patológico a nivel de poblacion, en este caso es a nivel de establecimientos, aun cuando puede llevars a cabo a nivel de animales afectados.
+
+```{r}
+epi_general <- casos %>%
+  count(Fecha_Sospecha)
+
+ggplot(
+  epi_general,
+  aes(
+    x = Fecha_Sospecha,
+    y = n
+  )
+) +
+  geom_col(fill = "firebrick") +
+  labs(
+    title = "Curva epidémica general",
+    subtitle = "Todos los establecimientos afectados",
+    x = "Fecha de sospecha",
+    y = "Número de establecimientos"
+  ) +
+  theme_bw()
+
+```
+
+## Curvas epidémicas por especie
+
+### Bovinos
+
+Curva epidémica de bovinos.
+
+```{r}
+epi_bovinos <- casos %>%
+  filter(Bovinos_Afectados > 0) %>%
+  count(Fecha_Sospecha)
+
+ggplot(
+  epi_bovinos,
+  aes(
+    Fecha_Sospecha,
+    n
+  )
+) +
+  geom_col(fill = "steelblue") +
+  labs(
+    title = "Curva epidémica de bovinos",
+    x = "Fecha de sospecha",
+    y = "Predios afectados"
+  ) +
+  theme_bw()
+
+```
+
+### Ovinos
+
+Curva epidémica de ovinos.
+
+```{r}
+epi_ovinos <- casos %>%
+  filter(Ovinos_Afectados > 0) %>%
+  count(Fecha_Sospecha)
+
+ggplot(
+  epi_ovinos,
+  aes(
+    Fecha_Sospecha,
+    n
+  )
+) +
+  geom_col(fill = "darkgreen") +
+  labs(
+    title = "Curva epidémica de ovinos",
+    x = "Fecha de sospecha",
+    y = "Predios afectados"
+  ) +
+  theme_bw()
+
+```
+
+### Porcinos
+
+Curva epidémica de porcinos.
+
+```{r}
+epi_porcinos <- casos %>%
+  filter(Porcinos_Afectados > 0) %>%
+  count(Fecha_Sospecha)
+
+ggplot(
+  epi_porcinos,
+  aes(
+    Fecha_Sospecha,
+    n
+  )
+) +
+  geom_col(fill = "darkorange") +
+  labs(
+    title = "Curva epidémica de porcinos",
+    x = "Fecha de sospecha",
+    y = "Predios afectados"
+  ) +
+  theme_bw()
+```
+
+## Morbilidad de rebaños según orientación productiva
+
+La morbilidad, que en rigor es incidencia y prevalencia, son un conjunto de medidas que permiten aproximarse a la intensidad del brote de la enfermedad. En este caso se calcula la incidencia acumulada para el período completo, es decir el total de casos nuevos. En el primer cuadro se analiza la incidencia acumulada por orientación productiva de los establecimientos. Esto es interesante ya que los sistemas productivos tienen distintas formas de manejar los animales y tienen tasas de contacto entre ellos distintas.
+
+```{r}
+total_predios <- datos %>%
+  count(orientacion_productiva,
+        name = "Total_Predios")
+
+predios_afectados <- casos %>%
+  count(orientacion_productiva,
+        name = "Predios_Afectados")
+
+tabla_rebano <- total_predios %>%
+  left_join(
+    predios_afectados,
+    by = "orientacion_productiva"
+  ) %>%
+  mutate(
+    Predios_Afectados = ifelse(
+      is.na(Predios_Afectados),
+      0,
+      Predios_Afectados
+    ),
+    Morbilidad_Rebano = round(
+      100 * Predios_Afectados / Total_Predios,
+      2
+    )
+  ) %>%
+  arrange(desc(Morbilidad_Rebano))
+
+tabla_rebano %>%
+  gt() %>%
+  tab_header(
+    title = "Morbilidad de rebaño",
+    subtitle = "Según orientación productiva"
+  )
+```
+
+## Morbilidad según especie
+
+Aquí se presenta la incidencia acumulada por especie, las cuales tienen distintas suceptibilidades entre ellas a fiebre aftosa.
+
+```{r}
+morbilidad_especies <- tibble(
+  Especie = c(
+    "Bovinos",
+    "Ovinos",
+    "Porcinos"
+  ),
+  Poblacion = c(
+    sum(datos$Bovinos_Adultos + datos$Bovinos_Jovenes),
+    sum(datos$Ovinos_Adultos + datos$Ovinos_Jovenes),
+    sum(datos$Porcinos_Adultos + datos$Porcinos_Jovenes)
+  ),
+  Afectados = c(
+    sum(casos$Bovinos_Afectados),
+    sum(casos$Ovinos_Afectados),
+    sum(casos$Porcinos_Afectados)
+  )
+) %>%
+  mutate(
+    Morbilidad = round(
+      100 * Afectados / Poblacion,
+      2
+    )
+  )
+
+morbilidad_especies %>%
+  gt() %>%
+  tab_header(
+    title = "Morbilidad por especie"
+  )
+```
+
+## Mapa de establecimientos afectados
+
+El patrón espacial es muy importante en el seguimiento de la trayectoria de un brote epidémico, permite entender la extensión del problema, entender e inferir el tipo de trasnmisión que está predominando en la enfermedad y ayudar a establecer medidas de control como puede ser control de movimientos de animales y productos. Estos datos estaban anonimizados antes de ser descargados, en ese proceso sus coordenadas fueron transformadas desde un sistema geografico o proyectado a un sistema de coordenadas especiales para el set de datos. Lo anterior permite reconocer la forma de la unidad geográfica subyacente pero no permite proyectar al fondo un mapa real del Reino Unido. En una próxima version del proyecto se buscará establecer una cartografía de fondo, sólo con fines de práctica.
+
+
+```{r}
+ggplot(datos,
+       aes(x = x,
+           y = y,
+           color = estatus)) +
+  geom_point(
+    size = 2,
+    alpha = 0.7
+  ) +
+  scale_color_manual(
+    values = c(
+      "caso" = "red",
+      "control" = "darkgray"
+    )
+  ) +
+  coord_equal() +
+  labs(
+    title = "Distribución espacial de establecimientos",
+    subtitle = "Casos y controles",
+    x = "Coordenada X",
+    y = "Coordenada Y",
+    color = "Estatus"
+  ) +
+  theme_bw()
+```
+
+
+
+## Mapa de calor de establecimientos afectados
+
+Dentro de las visualizaciones espaciales de los datos la representación de la densidad de casos es fundamental para observar lugares dónde se pueden esperar mas casos o dónde se ha producido el mayor efecto. Una de la sposibles utilidades de lo anterior, entre otras, es identificar que factores de riesgo llevaron a que en un lugar ocurran mas casos que en otro.
+
+```{r}
+ggplot(casos,
+       aes(x = x,
+           y = y)) +
+  stat_density_2d(
+    aes(fill = after_stat(level)),
+    geom = "polygon",
+    alpha = 0.6,
+    color = NA
+  ) +
+  scale_fill_viridis_c(
+    name = "Densidad"
+  ) +
+  coord_equal() +
+  labs(
+    title = "Mapa de calor de establecimientos afectados",
+    subtitle = "Densidad espacial de casos",
+    x = "Coordenada X",
+    y = "Coordenada Y"
+  ) +
+  theme_bw()
+```
+
+
+## Distribución espacial según orientación productiva
+
+La distribución espacial de los establecimientos según prientación productiva es una de los análisis que pueden hacerse para ver si el tipo de producción constituye o no un factor de riesgo.
+
+```{r}
+ggplot(datos,
+       aes(x = x,
+           y = y,
+           color = orientacion_productiva)) +
+  geom_point(
+    size = 2,
+    alpha = 0.7
+  ) +
+  coord_equal() +
+  labs(
+    title = "Distribución espacial según orientación productiva",
+    x = "Coordenada X",
+    y = "Coordenada Y",
+    color = "Orientación"
+  ) +
+  theme_bw()
+
+```
+
+## Evolución temporal por orientación productiva
+
+Dentro de las visualizaciones de series de tiempo pueden verse la evolución por orientación productiva la que permite inferir si hhubo preeminencia de algún sistema en algún momento.
+
+```{r}
+casos %>%
+  count(
+    Fecha_Sospecha,
+    orientacion_productiva
+  ) %>%
+  ggplot(
+    aes(
+      Fecha_Sospecha,
+      n,
+      color = orientacion_productiva
+    )
+  ) +
+  geom_line(linewidth = 1) +
+  labs(
+    title = "Evolución temporal por orientación productiva",
+    x = "Fecha",
+    y = "Número de establecimientos"
+  ) +
+  theme_bw()
+```
+
+
+## Tamaño poblacional y animales afectados
+
+Otro de los análisis que vale la pena llevar a cabo es evaluar la relación entre el tamaño de poblacion y el número de animales afectados.
+
+```{r}
+casos %>%
+  mutate(
+    total_animales =
+      Bovinos_Adultos +
+      Bovinos_Jovenes +
+      Ovinos_Adultos +
+      Ovinos_Jovenes +
+      Porcinos_Adultos +
+      Porcinos_Jovenes
+  ) %>%
+  mutate(
+    total_afectados =
+      Bovinos_Afectados +
+      Ovinos_Afectados +
+      Porcinos_Afectados
+  ) %>%
+  ggplot(
+    aes(
+      total_animales,
+      total_afectados
+    )
+  ) +
+  geom_point(alpha = 0.7) +
+  geom_smooth(
+    method = "lm",
+    se = FALSE
+  ) +
+  labs(
+    title = "Tamaño del establecimiento y número de animales afectados",
+    x = "Total de animales",
+    y = "Animales afectados"
+  ) +
+  theme_bw()
+```
+
+## Conclusiones
+
+Las visualizaciones tanto en forma de grafico como en forma de mapas se muestran hasta este momento utiles para describir la situación sin embargo para el proyecto de tesis deberán ser investigadas formas de resumen de información mas eficientes que permitan incluir informacion de varios miles de iteraciones del modelo.
