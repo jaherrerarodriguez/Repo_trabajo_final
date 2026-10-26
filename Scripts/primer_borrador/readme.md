@@ -1,1 +1,3 @@
 # Primer borrador del proyecto
+Este primer borrador consta de tres archivos, el qmd (Archivo Quarto que tiene los chunk de código o scripts), el archivo html que resulta de la renderización del archivo Quarto y el archivo de datos que debe estar en la misma ubicación que el archivo qmd para que este último pueda ser renderizado sin tener que definir una ruta relativa o absoluta.
+El archivo de datos tal como esta señalado en la descripción del repositorio esta basado en el archivo de datos fmd.csv que esta en el paquete sparr de R y que tiene parte de los datos de los casos de fiebre aftosa detectados en el condado de Cumbria (UK) el año 2001. Los datos son simulados y no se puede extrapolar ni deducir nada de los resultados obtenidos.
