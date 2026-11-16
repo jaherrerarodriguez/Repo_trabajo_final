@@ -20,6 +20,8 @@ execute:
 
 ## Librerías
 
+Se cargarán la slibrerías necesarias para el análisis que se pretende hacer, se destaca el uso de sf y leaflet para elmanejo de los datos espaciales, asi como librerias tidy para el manejo de los datos.
+
 ```{r}
 library(tidyverse)
 library(lubridate)
@@ -32,6 +34,9 @@ library(scales)
 
 
 ## Carga de datos
+
+Se carga el set de datos simulado de los casos en el condado de North Cumbria en Reino Unido, se establecen las fechas del dataframe con el formato fecha y se establece que no todas los campos string corresponde a factores.Se crea además un objeto "casos", formado desde un filtro del campo estatus, que será usado en el análisis posteriormento.
+
 
 ```{r}
 datos <- read.csv(
